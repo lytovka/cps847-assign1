@@ -1,0 +1,2 @@
+class InvalidOptions(Exception):
+    pass
