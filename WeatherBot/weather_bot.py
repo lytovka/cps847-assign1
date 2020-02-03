@@ -7,9 +7,9 @@ from spacy import load as spacy_load
 from pyowm import OWM
 from errors import InvalidOptions
 
-slack_client = SlackClient("xoxb-916817055062-921192447891-jHAJWDfvKbgLCs9AKty6GFCK")
+slack_client = SlackClient("")
 nlp = spacy_load("en_core_web_sm")
-owm = OWM("e00689123ab6db5f5d9c7d9358b4a90b")
+owm = OWM("")
 
 RTM_READ_DELAY = 1
 MENTION_REGEX = "^<@(|[WU].+?)>(.*)"
@@ -61,7 +61,7 @@ def printTemperature(location, weather):
 def printWeather(location, weather):
     response = printTemperature(location, weather)
     response += "\n{} with {} humidity and wind speeds of {}.".format(
-        get_detailed_status(weather), getHumidity(weather), getWind(weather)
+        get_detailed_status(weather)[:1].upper() + get_detailed_status(weather)[1:], getHumidity(weather), getWind(weather)
     )
     return response
 
