@@ -1,18 +1,86 @@
 import os
-import time
 import re
 import spacy
+import time
+from collections import Counter
+from errors import InvalidOptions
+from pyowm import OWM
 from slackclient import SlackClient
 from spacy import load as spacy_load
-from pyowm import OWM
-from errors import InvalidOptions
-
-slack_client = SlackClient("")
-nlp = spacy_load("en_core_web_sm")
-owm = OWM("")
 
 RTM_READ_DELAY = 1
 MENTION_REGEX = "^<@(|[WU].+?)>(.*)"
+
+slack_client = SlackClient("")
+nlp = spacy_load("en_core_web_lg")
+owm = OWM("")
+
+
+def words(document):
+    return re.findall(r"\w+", document.lower())
+
+
+WORDS = Counter(words(open("city.list.json", errors="ignore").read()))
+
+
+def P(word, acc=sum(WORDS.values())):
+    return WORDS[word] / acc
+
+
+def fixSpelling(word):
+    return max(possibleSpelllings(word), key=P)
+
+
+def possibleSpelllings(word):
+    inFileWord = inFile([word])
+    differenceOfOne = inFile(diffOne(word))
+    differenceOfTwo = inFile(diffTwo(word))
+    unknownWord = [word]
+    return inFileWord or differenceOfOne or differenceOfTwo or unknownWord
+
+
+def inFile(words):
+    s = set()
+    for w in words:
+        if w in WORDS:
+            s.add(w)
+    return s
+
+
+def diffOne(word):
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    letterCombinations, rmOneLetter, swapAdjLetters, replaceLetter, addLetter = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+    for i in range(len(word) + 1):
+        letterCombinations.append((word[:i], word[i:]))
+    for L, R in letterCombinations:
+        if R:
+            rmOneLetter.append(L + R[1:])
+    for L, R in letterCombinations:
+        if len(R) > 1:
+            swapAdjLetters.append(L + R[1] + R[0] + R[2:])
+    for L, R in letterCombinations:
+        if R:
+            for c in alphabet:
+                replaceLetter.append(L + c + R[1:])
+    for L, R in letterCombinations:
+        for c in alphabet:
+            addLetter.append(L + c + R)
+
+    return set(rmOneLetter + swapAdjLetters + replaceLetter + addLetter)
+
+
+def diffTwo(word):
+    L = []
+    for e1 in diffOne(word):
+        for e2 in diffOne(e1):
+            L.append(e2)
+    return L
 
 
 def parse_bot_commands(slack_events, starterbot_id):
@@ -30,6 +98,10 @@ def parse_direct_mention(message_text):
 
 
 def process(message):
+    for i in range(len(message.split())):
+        correct = fixSpelling(message.split()[i])
+        if correct in WORDS:
+            message += " " + correct
     doc = nlp(message)
     subject = get_subject(message)
     location = getLocation(doc.ents)
@@ -61,7 +133,9 @@ def printTemperature(location, weather):
 def printWeather(location, weather):
     response = printTemperature(location, weather)
     response += "\n{} with {} humidity and wind speeds of {}.".format(
-        get_detailed_status(weather)[:1].upper() + get_detailed_status(weather)[1:], getHumidity(weather), getWind(weather)
+        get_detailed_status(weather)[:1].upper() + get_detailed_status(weather)[1:],
+        getHumidity(weather),
+        getWind(weather),
     )
     return response
 
@@ -79,7 +153,7 @@ def getHumidity(weather):
 
 
 def getWind(weather):
-    wind = str(round(weather.get_wind("miles_hour")['speed'], 2)) + " MPH"
+    wind = str(round(weather.get_wind("miles_hour")["speed"], 2)) + " MPH"
     return wind
 
 
